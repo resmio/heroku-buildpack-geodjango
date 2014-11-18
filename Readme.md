@@ -74,15 +74,16 @@ All libraries are stored in the directory `/app/.geodjango`.
 You can also provide arbitrary releases Python with a `runtime.txt` file.
 
     $ cat runtime.txt
-    python-3.3.3
+    python-3.4.2
 
 Runtime options include:
 
-- python-2.7.6
-- python-3.3.3
-- pypy-1.9 (experimental)
+- python-2.7.8
+- python-3.4.2
+- pypy-2.4.0 (unsupported, experimental)
+- pypy3-2.3.1 (unsupported, experimental)
 
-Other [unsupported runtimes](https://github.com/kennethreitz/python-versions/tree/master/formula) are available as well.
+Other [unsupported runtimes](https://github.com/heroku/heroku-buildpack-python/tree/master/builds/runtimes) are available as well.
 
 ## Contact
 
