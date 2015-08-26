@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This script serves as the GDAL build step of the
-# [**GeoDjango Buildpack**](https://github.com/dulaccc/heroku-buildpack-geodjango)
+# [**Python Buildpack**](https://github.com/heroku/heroku-buildpack-python)
 # compiler.
 #
 # A [buildpack](http://devcenter.heroku.com/articles/buildpacks) is an
@@ -9,28 +9,29 @@
 #
 # This script is invoked by [`bin/compile`](/).
 
-# The location of the pre-compiled libmemcached binary.
-VENDORED_GDAL="https://s3.amazonaws.com/cirheroku/gdal-1.8.1-heroku.tar.gz"
+# The location of the pre-compiled cryptography binary.
+VENDORED_GDAL="https://lang-python.s3.amazonaws.com/$STACK/libraries/vendor/gdal.tar.gz"
+
+PKG_CONFIG_PATH="/app/.heroku/vendor/lib/pkgconfig:$PKG_CONFIG_PATH"
 
 # Syntax sugar.
 source $BIN_DIR/utils
 
-puts-step "Checking for GDAL"
+bpwatch start gdal_install
 
-if [ ! -d $CACHE_DIR/gdal ]; then
-  # Download and extract gdal into target vendor directory.
-  echo "Fetching and installing GDAL 1.8.1" | indent
-  curl -s -L -o tmp-gdal.tar.gz $VENDORED_GDAL
-  echo "Caching ..." | indent
-  tar -zxvf tmp-gdal.tar.gz >/dev/null
-  rm tmp-gdal.tar.gz
-  mv gdal $CACHE_DIR
+# If GDAL exists within requirements, use vendored gdal.
+if (pip-grep -s requirements.txt GDAL &> /dev/null) then
+
+  if [ -f ".heroku/vendor/bin/gdalserver" ]; then
+    export GDAL=$(pwd)/vendor
+  else
+    echo "-----> Noticed GDAL. Bootstrapping gdal."
+    mkdir -p .heroku/vendor
+    # Download and extract cryptography into target vendor directory.
+    curl $VENDORED_GDAL -s | tar zxv -C .heroku/vendor &> /dev/null
+
+    export GDAL=$(pwd)/vendor
+  fi
 fi
 
-mkdir -p $BUILD_DIR/.geodjango
-cp -R $CACHE_DIR/gdal $BUILD_DIR/.geodjango
-echo "Installed" | indent
-
-# make the lib path accessible
-export GDAL_LIBRARY_PATH=$BUILD_DIR/.geodjango/gdal/lib/libgdal.so
-echo "GDAL installed and accessible with env variable 'GDAL_LIBRARY_PATH'" | indent
+bpwatch stop gdal_install

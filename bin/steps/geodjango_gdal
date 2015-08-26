@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+# This script serves as the GDAL build step of the
+# [**GeoDjango Buildpack**](https://github.com/dulaccc/heroku-buildpack-geodjango)
+# compiler.
+#
+# A [buildpack](http://devcenter.heroku.com/articles/buildpacks) is an
+# adapter between a Python application and Heroku's runtime.
+#
+# This script is invoked by [`bin/compile`](/).
+
+# Syntax sugar.
+source $BIN_DIR/utils
+source $BIN_DIR/helpers
+
+# Retrieve version
+GDAL_VERSION=$(manifest_version "gdal")
+
+# Display some information
+echo "Using gdal version: ${GDAL_VERSION}" | indent
+
+if [ ! -d $CACHE_DIR/gdal ]; then
+  # Download and extract gdal into target vendor directory.
+  echo "Fetching, caching and installing gdal" | indent
+  download_package "gdal" "${GDAL_VERSION}" "${CACHE_DIR}/gdal"
+fi
+
+mkdir -p $BUILD_DIR/.geodjango
+cp -R $CACHE_DIR/gdal $BUILD_DIR/.geodjango
+echo "Installed" | indent
+
+# make the lib path accessible
+export GDAL_LIBRARY_DIR=$BUILD_DIR/.geodjango/gdal
+export GDAL_LIBRARY_PATH=$GDAL_LIBRARY_DIR/lib/libgdal.so
+export GDAL_DATA_PATH=$GDAL_LIBRARY_DIR/share/gdal
+echo "GDAL installed and accessible with env variable 'GDAL_LIBRARY_PATH'" | indent

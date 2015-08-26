@@ -1,0 +1,17 @@
+# Configuration
+S3_BUCKET="dulaccc-buildpack-geodjango"
+
+function manifest_version() {
+  curl "http://${S3_BUCKET}.s3.amazonaws.com/${STACK}/manifest.${1}" -s -o - | head -n 1
+}
+
+function download_package() {
+  name="$1"
+  version="$2"
+  location="$3"
+
+  mkdir -p $location
+  package="https://${S3_BUCKET}.s3.amazonaws.com/${STACK}/$name-$version.tar.gz"
+  echo $package
+  curl $package -s -o - | tar xzf - -C $location
+}

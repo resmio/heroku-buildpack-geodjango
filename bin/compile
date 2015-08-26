@@ -14,7 +14,7 @@ export PATH=:/usr/local/bin:$PATH
 BIN_DIR=$(cd $(dirname $0); pwd) # absolute path
 ROOT_DIR=$(dirname $BIN_DIR)
 BUILD_DIR=$1
-CACHE_DIR=$2
+CACHE_DIR="${2}/${STACK:-$DEFAULT_PYTHON_STACK}"
 ENV_DIR=$3
 
 
@@ -24,12 +24,13 @@ CACHED_DIRS=".heroku"
 VIRTUALENV_LOC=".heroku/venv"
 LEGACY_TRIGGER="lib/python2.7"
 PROFILE_PATH="$BUILD_DIR/.profile.d/python.sh"
+WEBCONCURRENCY_PROFILE_PATH="$BUILD_DIR/.profile.d/python.webconcurrency.sh"
 
-DEFAULT_PYTHON_VERSION="python-2.7.8"
+DEFAULT_PYTHON_VERSION="python-2.7.10"
 DEFAULT_PYTHON_STACK="cedar"
 PYTHON_EXE="/app/.heroku/python/bin/python"
-PIP_VERSION="1.5.6"
-SETUPTOOLS_VERSION="7.0"
+PIP_VERSION="7.0.1"
+SETUPTOOLS_VERSION="16.0"
 
 # Setup bpwatch
 export PATH=$PATH:$ROOT_DIR/vendor/bpwatch
@@ -41,7 +42,7 @@ BUILDPACK_VERSION=v28
 export PATH=$PATH:$ROOT_DIR/vendor/pip-pop
 
 # Support Anvil Build_IDs
-[ ! "$SLUG_ID" ] && SLUG_ID="dulacccfoo"
+[ ! "$SLUG_ID" ] && SLUG_ID="defaultslug"
 [ ! "$REQUEST_ID" ] && REQUEST_ID=$SLUG_ID
 [ ! "$STACK" ] && STACK=$DEFAULT_PYTHON_STACK
 
@@ -65,20 +66,25 @@ source $BIN_DIR/utils
 APP_DIR='/app'
 TMP_APP_DIR=$CACHE_DIR/tmp_app_dir
 
-# Copy Anvil app dir to temporary storage...
-bpwatch start anvil_appdir_stage
+# Skip these steps for Docker.
+if [[ ! "$DOCKER_BUILD" ]]; then
+
+  # Copy Anvil app dir to temporary storage...
+  bpwatch start anvil_appdir_stage
   if [ "$SLUG_ID" ]; then
     mkdir -p $TMP_APP_DIR
     deep-mv $APP_DIR $TMP_APP_DIR
   else
     deep-rm $APP_DIR
   fi
-bpwatch stop anvil_appdir_stage
+  bpwatch stop anvil_appdir_stage
 
-# Copy Application code in.
-bpwatch start appdir_stage
-  deep-mv $BUILD_DIR $APP_DIR
-bpwatch stop appdir_stage
+  # Copy Application code in.
+  bpwatch start appdir_stage
+    deep-mv $BUILD_DIR $APP_DIR
+  bpwatch stop appdir_stage
+fi
+
 
 # Set new context.
 ORIG_BUILD_DIR=$BUILD_DIR
@@ -106,6 +112,7 @@ bpwatch stop pre_compile
 if [ ! -f requirements.txt ]; then
   echo "-e ." > requirements.txt
 fi
+
 
 # Sticky runtimes.
 if [ -f $CACHE_DIR/.heroku/python-version ]; then
@@ -162,18 +169,18 @@ source $BIN_DIR/steps/mercurial
 # Pylibmc support.
 source $BIN_DIR/steps/pylibmc
 
+# GeoDjango support. (GEOS, Proj.4, GDAL)
+bpwatch start geodjango_install
+  source $BIN_DIR/steps/geodjango_geos
+  source $BIN_DIR/steps/geodjango_proj4
+  source $BIN_DIR/steps/geodjango_gdal
+bpwatch stop geodjango_install
+
 # Libffi support.
 source $BIN_DIR/steps/cryptography
 
-# GeoDjango support. (GEOS, Proj.4, GDAL)
-# See [`bin/steps/geos`](geos.html).
-# See [`bin/steps/proj4`](proj4.html).
-# See [`bin/steps/gdal`](gdal.html).
-bpwatch start geodjango_install
-  source $BIN_DIR/steps/geos
-  source $BIN_DIR/steps/proj4
-  source $BIN_DIR/steps/gdal
-bpwatch stop geodjango_install
+# GDAL support.
+source $BIN_DIR/steps/gdal
 
 # Install dependencies with Pip.
 source $BIN_DIR/steps/pip-install
@@ -189,14 +196,18 @@ sub-env $BIN_DIR/steps/collectstatic
 set-env PATH '$HOME/.heroku/python/bin:$PATH'
 set-env PYTHONUNBUFFERED true
 set-env PYTHONHOME /app/.heroku/python
-set-env LIBRARY_PATH /app/.heroku/vendor/lib:/app/.heroku/python/lib
-set-env LD_LIBRARY_PATH '/app/.heroku/vendor/lib:/app/.heroku/python/lib:$LD_LIBRARY_PATH'
 set-env GEOS_LIBRARY_PATH $GEOS_LIBRARY_PATH
 set-env PROJ4_LIBRARY_PATH $PROJ4_LIBRARY_PATH
 set-env GDAL_LIBRARY_PATH $GDAL_LIBRARY_PATH
+set-env GDAL_DATA_PATH $GDAL_DATA_PATH
+set-env LIBRARY_PATH /app/.heroku/vendor/lib:/app/.heroku/python/lib
+set-env LD_LIBRARY_PATH "/app/.heroku/vendor/lib:/app/.heroku/python/lib:$GEOS_LIBRARY_DIR/lib:$PROJ4_LIBRARY_DIR/lib:$GDAL_LIBRARY_DIR/lib"':$LD_LIBRARY_PATH'
 set-default-env LANG en_US.UTF-8
 set-default-env PYTHONHASHSEED random
 set-default-env PYTHONPATH /app/
+
+# Install sane-default script for WEB_CONCURRENCY environment variable.
+cp $ROOT_DIR/vendor/python.webconcurrency.sh $WEBCONCURRENCY_PROFILE_PATH
 
 
 # Experimental post_compile hook.
@@ -213,14 +224,18 @@ bpwatch start dump_cache
 bpwatch stop dump_cache
 
 # ### Fin.
-bpwatch start appdir_commit
-  deep-mv $BUILD_DIR $ORIG_BUILD_DIR
-bpwatch stop appdir_commit
+if [[ ! "$DOCKER_BUILD" ]]; then
 
-bpwatch start anvil_appdir_commit
+  bpwatch start appdir_commit
+    deep-mv $BUILD_DIR $ORIG_BUILD_DIR
+  bpwatch stop appdir_commit
+
+  bpwatch start anvil_appdir_commit
   if [ "$SLUG_ID" ]; then
     deep-mv $TMP_APP_DIR $APP_DIR
   fi
 
-bpwatch stop anvil_appdir_commit
-bpwatch stop compile
+  bpwatch stop anvil_appdir_commit
+  bpwatch stop compile
+fi
+

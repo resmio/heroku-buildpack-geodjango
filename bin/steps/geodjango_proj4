@@ -9,22 +9,20 @@
 #
 # This script is invoked by [`bin/compile`](/).
 
-# The location of the pre-compiled libmemcached binary.
-VENDORED_PROJ4="https://s3.amazonaws.com/cirheroku/proj4-4.7.0-heroku.tar.gz"
-
 # Syntax sugar.
 source $BIN_DIR/utils
+source $BIN_DIR/helpers
 
-puts-step "Checking for Proj.4"
+# Retrieve version
+PROJ_VERSION=$(manifest_version "proj")
+
+# Display some information
+echo "Using proj version: ${PROJ_VERSION}" | indent
 
 if [ ! -d $CACHE_DIR/proj4 ]; then
   # Download and extract proj4 into target vendor directory.
-  echo "Fetching and installing Proj.4 4.7.0" | indent
-  curl -s -L -o tmp-proj4.tar.gz $VENDORED_PROJ4
-  echo "Caching ..." | indent
-  tar -zxvf tmp-proj4.tar.gz >/dev/null
-  rm tmp-proj4.tar.gz
-  mv proj4 $CACHE_DIR
+  echo "Fetching, caching and installing proj" | indent
+  download_package "proj" "${PROJ_VERSION}" "${CACHE_DIR}/proj4"
 fi
 
 mkdir -p $BUILD_DIR/.geodjango
@@ -32,5 +30,6 @@ cp -R $CACHE_DIR/proj4 $BUILD_DIR/.geodjango
 echo "Installed" | indent
 
 # make the lib path accessible
-export PROJ4_LIBRARY_PATH=$BUILD_DIR/.geodjango/proj4
+export PROJ4_LIBRARY_DIR=$BUILD_DIR/.geodjango/proj4
+export PROJ4_LIBRARY_PATH=$PROJ4_LIBRARY_DIR/lib/libproj.so
 echo "Proj.4 installed and accessible with env variable 'PROJ4_LIBRARY_PATH'" | indent
